@@ -1,0 +1,73 @@
+services:
+  # PostgreSQL
+  - type: pgsql
+    name: nepse-postgres
+    databaseName: nepse_db
+    plan: free
+    
+  # Redis
+  - type: redis
+    name: nepse-redis
+    plan: free
+    ipAllowList: []
+    
+  # Celery Worker
+  - type: worker
+    name: nepse-celery-worker
+    runtime: image
+    repo: https://github.com/yourusername/nepse-production-pipeline
+    branch: main
+    dockerCommand: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nepse-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: nepse-redis
+          type: redis
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      
+  # Celery Beat (Scheduler)
+  - type: worker
+    name: nepse-celery-beat
+    runtime: image
+    repo: https://github.com/yourusername/nepse-production-pipeline
+    branch: main
+    dockerCommand: celery -A app.workers.celery_app beat --loglevel=info
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nepse-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: nepse-redis
+          type: redis
+          property: connectionString
+      
+  # FastAPI Web Service
+  - type: web
+    name: nepse-api
+    runtime: image
+    repo: https://github.com/yourusername/nepse-production-pipeline
+    branch: main
+    dockerCommand: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nepse-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: nepse-redis
+          type: redis
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: 3.11.0
